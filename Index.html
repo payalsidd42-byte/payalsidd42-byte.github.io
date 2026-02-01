@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Chat App</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+body{margin:0;font-family:Arial;background:#ece5dd}
+#top{background:#075E54;color:#fff;padding:10px;text-align:center}
+#chat{height:70vh;overflow:auto;padding:10px}
+.msg{background:#dcf8c6;padding:8px;margin:5px;border-radius:6px;max-width:75%}
+.me{margin-left:auto;background:#a7f3a0}
+.status{font-size:11px;text-align:right;color:#555}
+#emoji{display:none;background:#fff;padding:5px}
+#emoji span{font-size:22px;padding:5px;cursor:pointer}
+#box{display:flex}
+input{flex:1;padding:8px;border:none}
+button{padding:8px;background:#25D366;color:white;border:none}
+</style>
+</head>
+
+<body>
+
+<div id="top">Simple WhatsApp Chat</div>
+<div id="chat"></div>
+
+<div id="emoji">
+  <span onclick="add('😀')">😀</span>
+  <span onclick="add('😂')">😂</span>
+  <span onclick="add('😍')">😍</span>
+  <span onclick="add('😭')">😭</span>
+  <span onclick="add('🔥')">🔥</span>
+</div>
+
+<div id="box">
+  <button onclick="toggle()">😀</button>
+  <input id="msg" placeholder="Message">
+  <button onclick="send()">Send</button>
+</div>
+
+<script>
+// 🔴 APNA FIREBASE CONFIG YAHA DALO
+firebase.initializeApp({
+  apiKey: "API_KEY",
+  authDomain: "PROJECT.firebaseapp.com",
+  databaseURL: "https://PROJECT.firebaseio.com",
+  projectId: "PROJECT"
+});
+
+const db = firebase.database();
+const user = prompt("Naam:");
+const room = prompt("Room Code:");
+const pass = prompt("Password:");
+const chat = document.getElementById("chat");
+
+// 🔐 Simple encryption
+function enc(t){
+  let r="";
+  for(let i=0;i<t.length;i++)
+    r+=String.fromCharCode(t.charCodeAt(i)^pass.charCodeAt(i%pass.length));
+  return btoa(r);
+}
+function dec(t){
+  t=atob(t); let r="";
+  for(let i=0;i<t.length;i++)
+    r+=String.fromCharCode(t.charCodeAt(i)^pass.charCodeAt(i%pass.length));
+  return r;
+}
+
+// 😀 Emoji
+function toggle(){
+  emoji.style.display = emoji.style.display=="block"?"none":"block";
+}
+function add(e){ msg.value+=e; }
+
+// 📤 Send
+function send(){
+  if(!msg.value) return;
+  db.ref("rooms/"+room).push({
+    u:user,
+    m:enc(msg.value),
+    t:Date.now(),
+    s:false
+  });
+  msg.value="";
+}
+
+// 📥 Receive + Seen
+db.ref("rooms/"+room).on("child_added", s=>{
+  const d=s.val(), key=s.key;
+  const div=document.createElement("div");
+  div.className="msg"+(d.u===user?" me":"");
+  div.innerHTML=`
+    <b>${d.u}</b><br>${dec(d.m)}
+    <div class="status" id="st_${key}">
+      ${d.u===user?(d.s?"✔✔ Seen":"✔ Sent"):""}
+    </div>`;
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
+
+  if(d.u!==user && !d.s)
+    db.ref("rooms/"+room+"/"+key+"/s").set(true);
+});
+
+// ✔✔ Seen update
+db.ref("rooms/"+room).on("child_changed", s=>{
+  const d=s.val();
+  const el=document.getElementById("st_"+s.key);
+  if(el && d.u===user && d.s) el.innerText="✔✔ Seen";
+});
+
+// ⏱️ Auto delete after 1 minute
+setInterval(()=>{
+  const now=Date.now();
+  db.ref("rooms/"+room).once("value", snap=>{
+    snap.forEach(c=>{
+      if(now-c.val().t>60000)
+        db.ref("rooms/"+room+"/"+c.key).remove();
+    });
+  });
+},5000);
+</script>
+
+</body>
+</html>
